@@ -9,6 +9,7 @@ import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.facebook.CallbackManager;
 import com.facebook.FacebookCallback;
@@ -18,6 +19,7 @@ import com.facebook.GraphRequest;
 import com.facebook.GraphResponse;
 import com.facebook.login.LoginResult;
 import com.facebook.login.widget.LoginButton;
+import com.google.android.gms.auth.api.Auth;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.auth.api.signin.GoogleSignInResult;
@@ -25,8 +27,9 @@ import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.common.SignInButton;
 import com.google.android.gms.common.api.GoogleApiClient;
-import com.google.android.gms.drive.Drive;
-import com.google.android.gms.plus.Plus;
+import com.google.android.gms.common.api.OptionalPendingResult;
+import com.google.android.gms.common.api.ResultCallback;
+import com.google.android.gms.common.api.Status;
 
 import org.json.JSONObject;
 
@@ -43,13 +46,14 @@ public class LoginActivity extends AppCompatActivity implements GoogleApiClient.
     //facebook login
     private static final int RC_FACEBOOK_LOGIN = 64206;
     private LoginButton loginButton;
-    private CallbackManager callbackManager;
+    private CallbackManager facebookCallbackManager;
 
     //google
     private static final int RC_SIGN_IN = 9001;
     private GoogleApiClient mGoogleApiClient;
     private SignInButton signInButton;
     private ProgressDialog mProgressDialog;
+
     /**
      * ATTENTION: This was auto-generated to implement the App Indexing API.
      * See https://g.co/AppIndexing/AndroidStudio for more information.
@@ -60,7 +64,7 @@ public class LoginActivity extends AppCompatActivity implements GoogleApiClient.
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         FacebookSdk.sdkInitialize(getApplicationContext(), RC_FACEBOOK_LOGIN);
-        callbackManager = CallbackManager.Factory.create();
+        facebookCallbackManager = CallbackManager.Factory.create();
         setContentView(R.layout.activity_login);
 
         info = (TextView) findViewById(R.id.info);
@@ -75,15 +79,35 @@ public class LoginActivity extends AppCompatActivity implements GoogleApiClient.
     @Override
     public void onStart() {
         super.onStart();
+        OptionalPendingResult<GoogleSignInResult> opr = Auth.GoogleSignInApi.silentSignIn(mGoogleApiClient);
+        if (opr.isDone()) {
+            // If the user's cached credentials are valid, the OptionalPendingResult will be "done"
+            // and the GoogleSignInResult will be available instantly.
+            Log.d(TAG, "Got cached sign-in");
+            GoogleSignInResult result = opr.get();
+            handleSignInResult(result);
+        } else {
+            // If the user has not previously signed in on this device or the sign-in has expired,
+            // this asynchronous branch will attempt to sign in the user silently.  Cross-device
+            // single sign-on will occur in this branch.
+            showProgressDialog();
+            opr.setResultCallback(new ResultCallback<GoogleSignInResult>() {
+                @Override
+                public void onResult(GoogleSignInResult googleSignInResult) {
+                    hideProgressDialog();
+                    handleSignInResult(googleSignInResult);
+                }
+            });
+        }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        if (mGoogleApiClient == null) {
-            mGoogleApiClient = new GoogleApiClient.Builder(this).addApi(Plus.API).addApi(Drive.API).addScope(Drive.SCOPE_FILE).addScope(Drive.SCOPE_APPFOLDER) // required for App Folder sample
+        /*if (mGoogleApiClient == null) {
+            mGoogleApiClient = new GoogleApiClient.Builder(this).addApi(Plus.API) // required for App Folder sample
                     .addConnectionCallbacks(this).addOnConnectionFailedListener(this).build();
-        }
+        }*/
         //mGoogleApiClient.connect();
     }
 
@@ -95,14 +119,32 @@ public class LoginActivity extends AppCompatActivity implements GoogleApiClient.
         super.onPause();
     }
 
+    @Override
+    public void onStop() {
+        super.onStop();
+    }
+
     //START google login
     private void initGoogleLogin() {
-        GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).requestEmail().build();
+        GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestEmail()
+                .build();
+        if (mGoogleApiClient == null) {
 
-        mGoogleApiClient = new GoogleApiClient.Builder(this).addApi(Plus.API).addApi(Drive.API).addScope(Drive.SCOPE_FILE).addScope(Drive.SCOPE_APPFOLDER) // required for App Folder sample
-                .addConnectionCallbacks(this).addOnConnectionFailedListener(this).build();
+            mGoogleApiClient = new GoogleApiClient.Builder(this)
+                    .enableAutoManage(this, this)
+                    .addApi(Auth.GOOGLE_SIGN_IN_API, gso)
+                    .build();
+        }
 
-
+        // [START customize_button]
+        // Customize sign-in button. The sign-in button can be displayed in
+        // multiple sizes and color schemes. It can also be contextually
+        // rendered based on the requested scopes. For example. a red button may
+        // be displayed when Google+ scopes are requested, but a white button
+        // may be displayed when only basic profile is requested. Try adding the
+        // Scopes.PLUS_LOGIN scope to the GoogleSignInOptions to see the
+        // difference.
         signInButton = (SignInButton) findViewById(R.id.sign_in_button);
         signInButton.setSize(SignInButton.SIZE_WIDE);
         signInButton.setScopes(gso.getScopeArray());
@@ -115,9 +157,8 @@ public class LoginActivity extends AppCompatActivity implements GoogleApiClient.
     }
 
     private void googleSignIn() {
-        /*Intent signInIntent = Auth.GoogleSignInApi.getSignInIntent(mGoogleApiClient);
-        startActivityForResult(signInIntent, RC_SIGN_IN);*/
-        mGoogleApiClient.connect();
+        Intent signInIntent = Auth.GoogleSignInApi.getSignInIntent(mGoogleApiClient);
+        startActivityForResult(signInIntent, RC_SIGN_IN);
     }
 
     private void handleSignInResult(GoogleSignInResult result) {
@@ -125,24 +166,26 @@ public class LoginActivity extends AppCompatActivity implements GoogleApiClient.
         if (result.isSuccess()) {
             // Signed in successfully, show authenticated UI.
             GoogleSignInAccount acct = result.getSignInAccount();
-            //mStatusTextView.setText (getString (R.string.signed_in_fmt, acct.getDisplayName ()));
-            info.setText(getString(R.string.signed_in_fmt) + acct.getDisplayName());
+            info.setText(getString(R.string.connected));
         } else {
             // Signed out, show unauthenticated UI.
             info.setText(R.string.signed_in_err);
         }
     }
 
+    // [START revokeAccess] for DISCONNECTING
     private void revokeAccess() {
-       /* Auth.GoogleSignInApi.revokeAccess(mGoogleApiClient).setResultCallback(new ResultCallback<Status>() {
-            @Override
-            public void onResult(Status status) {
-                // [START_EXCLUDE]
-                Toast.makeText(getApplicationContext(), "Login failed", Toast.LENGTH_LONG);
-                // [END_EXCLUDE]
-            }
-        });*/
+        Auth.GoogleSignInApi.revokeAccess(mGoogleApiClient).setResultCallback(
+                new ResultCallback<Status>() {
+                    @Override
+                    public void onResult(Status status) {
+                        // [START_EXCLUDE]
+                        Toast.makeText(getApplicationContext(), "Login failed", Toast.LENGTH_LONG);
+                        // [END_EXCLUDE]
+                    }
+                });
     }
+    // [END revokeAccess]
 
     private void showProgressDialog() {
         if (mProgressDialog == null) {
@@ -150,7 +193,6 @@ public class LoginActivity extends AppCompatActivity implements GoogleApiClient.
             mProgressDialog.setMessage(getString(R.string.loading));
             mProgressDialog.setIndeterminate(true);
         }
-
         mProgressDialog.show();
     }
 
@@ -167,7 +209,7 @@ public class LoginActivity extends AppCompatActivity implements GoogleApiClient.
         loginButton = (LoginButton) findViewById(R.id.login_button);
         loginButton.setReadPermissions(readPermissionNeeds);
 
-        loginButton.registerCallback(callbackManager, new FacebookCallback<LoginResult>() {
+        loginButton.registerCallback(facebookCallbackManager, new FacebookCallback<LoginResult>() {
             @Override
             public void onSuccess(final LoginResult loginResult) {
                 GraphRequest request = GraphRequest.newMeRequest(loginResult.getAccessToken(),
@@ -207,10 +249,14 @@ public class LoginActivity extends AppCompatActivity implements GoogleApiClient.
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == RC_FACEBOOK_LOGIN) {
-            callbackManager.onActivityResult(requestCode, resultCode, data);
+            facebookCallbackManager.onActivityResult(requestCode, resultCode, data);
         }
         if (requestCode == RC_SIGN_IN && resultCode == RESULT_OK) {
-            mGoogleApiClient.connect();
+            GoogleSignInResult result = Auth.GoogleSignInApi.getSignInResultFromIntent(data);
+            if (result.isSuccess()) {
+                mGoogleApiClient.connect();
+                GoogleSignInAccount acct = result.getSignInAccount();
+            }
 
         }
     }
@@ -246,10 +292,5 @@ public class LoginActivity extends AppCompatActivity implements GoogleApiClient.
     private void openDetailActivity() {
         Intent detailActivity = new Intent(this, DetailActivity.class);
         startActivity(detailActivity);
-    }
-
-    @Override
-    public void onStop() {
-        super.onStop();
     }
 }

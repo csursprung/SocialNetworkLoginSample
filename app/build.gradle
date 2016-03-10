@@ -29,9 +29,10 @@ dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
     compile 'com.android.support:appcompat-v7:23.1.1'
     compile 'com.facebook.android:facebook-android-sdk:4.+'
-    // Dependency for Google Sign-In, Drive [START]
+    // Dependency for Google Sign-In, Drive, Auth [START]
     compile 'com.google.android.gms:play-services-drive:8.4.0'
     compile 'com.google.android.gms:play-services-plus:8.4.0'
+    compile 'com.google.android.gms:play-services-auth:8.4.0'
     // Dependency for Google Sign-In, Drive [END]
 
     compile group:'com.squareup.picasso', name:'picasso', version:'2.5.0'
