@@ -71,7 +71,7 @@ public class LoginActivity extends AppCompatActivity implements GoogleApiClient.
         imageView = (ImageView) findViewById(R.id.imageView);
 
         initFacebookLoginButton();
-        initGoogleLogin();
+        initGoogleSignInButton();
         // ATTENTION: This was auto-generated to implement the App Indexing API.
         // See https://g.co/AppIndexing/AndroidStudio for more information.
     }
@@ -79,27 +79,34 @@ public class LoginActivity extends AppCompatActivity implements GoogleApiClient.
     @Override
     public void onStart() {
         super.onStart();
-        OptionalPendingResult<GoogleSignInResult> opr = Auth.GoogleSignInApi.silentSignIn(mGoogleApiClient);
-        if (opr.isDone()) {
-            // If the user's cached credentials are valid, the OptionalPendingResult will be "done"
-            // and the GoogleSignInResult will be available instantly.
-            Log.d(TAG, "Got cached sign-in");
-            GoogleSignInResult result = opr.get();
-            handleSignInResult(result);
-        } else {
-            // If the user has not previously signed in on this device or the sign-in has expired,
-            // this asynchronous branch will attempt to sign in the user silently.  Cross-device
-            // single sign-on will occur in this branch.
-            showProgressDialog();
-            opr.setResultCallback(new ResultCallback<GoogleSignInResult>() {
-                @Override
-                public void onResult(GoogleSignInResult googleSignInResult) {
-                    hideProgressDialog();
-                    handleSignInResult(googleSignInResult);
-                }
-            });
+        handleGoogleSilentSignIn();
+    }
+
+    private void handleGoogleSilentSignIn() {
+        if (mGoogleApiClient != null) {
+            OptionalPendingResult<GoogleSignInResult> opr = Auth.GoogleSignInApi.silentSignIn(mGoogleApiClient);
+            if (opr.isDone()) {
+                // If the user's cached credentials are valid, the OptionalPendingResult will be "done"
+                // and the GoogleSignInResult will be available instantly.
+                Log.d(TAG, "Got cached sign-in");
+                GoogleSignInResult result = opr.get();
+                handleSignInResult(result);
+            } else {
+                // If the user has not previously signed in on this device or the sign-in has expired,
+                // this asynchronous branch will attempt to sign in the user silently.  Cross-device
+                // single sign-on will occur in this branch.
+                showProgressDialog();
+                opr.setResultCallback(new ResultCallback<GoogleSignInResult>() {
+                    @Override
+                    public void onResult(GoogleSignInResult googleSignInResult) {
+                        hideProgressDialog();
+                        handleSignInResult(googleSignInResult);
+                    }
+                });
+            }
         }
     }
+
 
     @Override
     protected void onResume() {
@@ -125,17 +132,10 @@ public class LoginActivity extends AppCompatActivity implements GoogleApiClient.
     }
 
     //START google login
-    private void initGoogleLogin() {
+    private void initGoogleSignInButton() {
         GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                .requestEmail()
+                .requestEmail().requestIdToken(getString(R.string.server_client_id))
                 .build();
-        if (mGoogleApiClient == null) {
-
-            mGoogleApiClient = new GoogleApiClient.Builder(this)
-                    .enableAutoManage(this, this)
-                    .addApi(Auth.GOOGLE_SIGN_IN_API, gso)
-                    .build();
-        }
 
         // [START customize_button]
         // Customize sign-in button. The sign-in button can be displayed in
@@ -157,6 +157,16 @@ public class LoginActivity extends AppCompatActivity implements GoogleApiClient.
     }
 
     private void googleSignIn() {
+        if (mGoogleApiClient == null) {
+            GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                    .requestEmail().requestIdToken(getString(R.string.server_client_id))
+                    .build();
+            mGoogleApiClient = new GoogleApiClient.Builder(this)
+                    .enableAutoManage(this, this)
+                    .addApi(Auth.GOOGLE_SIGN_IN_API, gso)
+                    .build();
+        }
+
         Intent signInIntent = Auth.GoogleSignInApi.getSignInIntent(mGoogleApiClient);
         startActivityForResult(signInIntent, RC_SIGN_IN);
     }
@@ -256,6 +266,13 @@ public class LoginActivity extends AppCompatActivity implements GoogleApiClient.
             if (result.isSuccess()) {
                 mGoogleApiClient.connect();
                 GoogleSignInAccount acct = result.getSignInAccount();
+                Bundle bundle = new Bundle();
+                bundle.putString("gDisplayName", acct.getDisplayName());
+                bundle.putString("gId", acct.getId());
+                bundle.putString("gPhoto", acct.getPhotoUrl().toString());
+                bundle.putString("gEmail", acct.getEmail());
+                bundle.putString("gIdToken", acct.getIdToken());
+                openDetailActivity(bundle);
             }
 
         }
@@ -290,7 +307,14 @@ public class LoginActivity extends AppCompatActivity implements GoogleApiClient.
     }
 
     private void openDetailActivity() {
+        openDetailActivity(null);
+    }
+
+    private void openDetailActivity(Bundle bundle) {
         Intent detailActivity = new Intent(this, DetailActivity.class);
+        if (bundle != null) {
+            detailActivity.putExtras(bundle);
+        }
         startActivity(detailActivity);
     }
 }
