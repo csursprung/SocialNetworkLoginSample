@@ -219,7 +219,7 @@ public class DetailActivity extends AppCompatActivity {
 
 
                 HttpClient httpClient = new DefaultHttpClient();
-                HttpPost httpPost = new HttpPost("http://ursprung.hu/auth/index.php");
+                HttpPost httpPost = new HttpPost("http://endpoint.php");
 
                 try {
                     List nameValuePairs = new ArrayList(1);
@@ -246,12 +246,12 @@ public class DetailActivity extends AppCompatActivity {
                     String success = String.valueOf(jObj.get("success"));
                     String error = String.valueOf(jObj.get("error"));
                     String reFbToken = String.valueOf(jObj.get("reFbToken"));
+                    String reGToken = String.valueOf(jObj.get("reGToken"));
 
-                    if (mFbToken != null && mFbToken.length() > 0 && reFbToken != null && reFbToken.equals(mFbToken)) {
+                    if ((mFbToken != null && mFbToken.length() > 0 && reFbToken != null && reFbToken.equals(mFbToken))
+                            || (mGToken != null && mGToken.length() > 0 && reGToken != null && reGToken.equals(mGToken))) {
                         Log.i(TAG, "Signed in as: " + mUsername);
                     }
-
-
                 } catch (ClientProtocolException e) {
                     Log.e(TAG, "Error sending ID token to backend.", e);
                 } catch (IOException e) {
